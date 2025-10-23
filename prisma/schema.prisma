@@ -1,0 +1,65 @@
+// Homework Helper - Simple Database Schema
+// 3 tables: User, Conversation (no complex parent/child/achievements for MVP)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER - Combined auth + profile in one table (simplified!)
+// ============================================================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String   // bcrypt hashed
+
+  // Profile info
+  name          String   // "Katie"
+  age           Int      // 11
+  selectedVoice String   @default("shimmer")
+  totalPoints   Int      @default(0)
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  conversations Conversation[]
+
+  @@index([email])
+}
+
+// ============================================================================
+// CONVERSATION - Track voice sessions with Katie
+// ============================================================================
+
+model Conversation {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Session timing
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  durationMinutes Int?
+
+  // Content
+  topic           String?  // "fractions", "spelling", etc.
+  pointsEarned    Int      @default(0)
+
+  // Store transcript as JSON (simple!)
+  transcript      Json?    // Array of { role: "child" | "tutor", content: string, timestamp: string }
+
+  // Connection debugging (to fix POC clunkiness)
+  connectionAttempts Int     @default(1)
+  hadErrors         Boolean @default(false)
+  errorLog          Json?   // Track connection issues
+
+  @@index([userId, startedAt])
+}
