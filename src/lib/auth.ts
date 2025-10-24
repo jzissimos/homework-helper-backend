@@ -3,7 +3,12 @@
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+// JWT secret must be set in environment variables for security
+const JWT_SECRET = process.env.JWT_SECRET
+
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL: JWT_SECRET environment variable is required. Please set it in your .env file.')
+}
 
 export interface TokenPayload {
   userId: string

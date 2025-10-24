@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extractToken, verifyToken } from '@/lib/auth'
 import { getVoiceById } from '@/lib/voices'
+import { checkRateLimit, rateLimitResponse } from '@/lib/rateLimit'
 
 // Authenticate user
 async function authenticateRequest(request: NextRequest) {
@@ -41,6 +42,12 @@ async function authenticateRequest(request: NextRequest) {
 // POST /api/conversation - Create ephemeral OpenAI Realtime API token
 export async function POST(request: NextRequest) {
   try {
+    // Check rate limit first (10 conversations per hour)
+    const { allowed, retryAfter } = checkRateLimit(request, 'CONVERSATION')
+    if (!allowed) {
+      return rateLimitResponse(retryAfter!)
+    }
+
     const result = await authenticateRequest(request)
 
     if ('error' in result) {
@@ -51,6 +58,32 @@ export async function POST(request: NextRequest) {
     }
 
     const { user } = result
+
+    // Check daily conversation limit (20 per day)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const conversationCount = await prisma.conversation.count({
+      where: {
+        userId: user.id,
+        startedAt: {
+          gte: today
+        }
+      }
+    })
+
+    if (conversationCount >= 20) {
+      return NextResponse.json(
+        {
+          error: 'Daily conversation limit reached (20 per day)',
+          limitType: 'daily',
+          limit: 20,
+          used: conversationCount,
+          resetTime: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString()
+        },
+        { status: 429 }
+      )
+    }
 
     // Validate voice
     const voice = getVoiceById(user.selectedVoice)
